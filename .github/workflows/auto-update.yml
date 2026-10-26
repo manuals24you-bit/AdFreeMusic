@@ -1,1 +1,81 @@
+# Codziennie sprawdza, czy wyszło nowe NewPipeExtractor.
+# Jeśli tak: podbija wersję, buduje podpisane APK i publikuje je w Releases.
+# Aplikacja (przycisk aktualizacji) pobiera stamtąd nową wersję.
+name: Auto-update & build
 
+on:
+  schedule:
+    - cron: "17 4 * * *"   # codziennie ok. 6:17 czasu polskiego
+  workflow_dispatch:        # ręczne uruchomienie z zakładki Actions
+    inputs:
+      force:
+        description: "Zbuduj nawet jeśli extractor się nie zmienił"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sprawdź najnowszy NewPipeExtractor
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(gh api repos/TeamNewPipe/NewPipeExtractor/releases/latest --jq .tag_name)
+          current=$(grep '^extractorVersion=' gradle.properties | cut -d= -f2)
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          if [ "$latest" != "$current" ] || [ "${{ inputs.force }}" = "true" ]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Extractor aktualny ($current) — nic do zrobienia."
+          fi
+
+      - name: Podbij wersję extractora
+        if: steps.ver.outputs.build == 'true' && steps.ver.outputs.latest != steps.ver.outputs.current
+        run: |
+          sed -i "s/^extractorVersion=.*/extractorVersion=${{ steps.ver.outputs.latest }}/" gradle.properties
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git commit -am "NewPipeExtractor ${{ steps.ver.outputs.latest }}"
+          git push
+
+      - uses: actions/setup-java@v4
+        if: steps.ver.outputs.build == 'true'
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+        if: steps.ver.outputs.build == 'true'
+
+      - name: Zbuduj podpisane APK
+        if: steps.ver.outputs.build == 'true'
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+        run: |
+          export VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))
+          echo "VERSION_CODE=$VERSION_CODE" >> "$GITHUB_ENV"
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > "$RUNNER_TEMP/release.jks"
+          export KEYSTORE_PATH="$RUNNER_TEMP/release.jks"
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "Muzyka-v$VERSION_CODE.apk"
+
+      - name: Opublikuj w Releases
+        if: steps.ver.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "v$VERSION_CODE" "Muzyka-v$VERSION_CODE.apk" \
+            --title "v$VERSION_CODE (extractor ${{ steps.ver.outputs.latest }})" \
+            --notes "Automatyczna kompilacja z NewPipeExtractor ${{ steps.ver.outputs.latest }}."
