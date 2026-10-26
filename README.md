@@ -2,8 +2,16 @@
 
 Android 9+ (minSdk 28). Kotlin + Jetpack Compose + Media3 + NewPipeExtractor.
 
-**Co działa:** wyszukiwanie, odtwarzanie samego dźwięku, odtwarzanie w tle z powiadomieniem
-i obsługą słuchawek, kolejka (przycisk ➕ przy utworze), przycisk aktualizacji (ikona w prawym górnym rogu).
+**Co działa:**
+- wyszukiwanie utworów i **playlist z YouTube** (przełącznik „Utwory / Playlisty”),
+- wklejenie linku do filmu lub playlisty w pole wyszukiwania od razu go otwiera,
+- playlista: „Odtwórz” / „Losowo” albo kliknięcie dowolnego utworu — cała playlista trafia do kolejki
+  (do 500 utworów, dociągane w tle),
+- kliknięcie wyniku wyszukiwania gra ten utwór, a potem kolejne wyniki,
+- pełnoekranowy odtwarzacz: duża okładka, tło w kolorze okładki, suwak, losowo/powtarzanie, kolejka,
+- tryb **Audio / Wideo** (wideo do 720p, z pełnym ekranem w poziomie),
+- odtwarzanie w tle z powiadomieniem i obsługą słuchawek,
+- przycisk aktualizacji (ikona w prawym górnym rogu).
 
 > Aplikacja łamie regulamin YouTube — tylko do prywatnego użytku, nie publikuj jej w Google Play.
 > NewPipeExtractor jest na licencji GPLv3, więc ten projekt też.
@@ -68,8 +76,7 @@ Od tej pory nowe wersje będą się budować same, gdy wyjdzie nowy extractor.
 - Najpierw: ikona aktualizacji. Jeśli jest nowy extractor, ale nie ma jeszcze APK —
   uruchom workflow ręcznie w Actions.
 - Błąd „captcha” = YouTube ograniczył zapytania z Twojego IP; odczekaj albo zmień sieć (Wi-Fi ↔ LTE).
-- Bardzo wolne buforowanie: YouTube czasem dławi strumienie. NewPipe obchodzi to własnym
-  źródłem danych z zapytaniami `range` — to dobry następny krok rozbudowy (`PlaybackService.kt`).
+- Gdy utwór jest niedostępny, odtwarzacz raz ponawia próbę, a potem przechodzi do następnego.
 
 ## Struktura
 
@@ -77,8 +84,12 @@ Od tej pory nowe wersje będą się budować same, gdy wyjdzie nowy extractor.
 |---|---|
 | `App.kt` | inicjalizacja NewPipe |
 | `DownloaderImpl.kt` | HTTP (OkHttp) dla extractora |
-| `YouTubeRepo.kt` | wyszukiwanie + adres strumienia audio |
+| `YouTubeRepo.kt` | wyszukiwanie utworów i playlist, linki |
+| `StreamResolver.kt` | wybór strumienia audio/wideo w chwili odtwarzania |
+| `ChunkedDataSource.kt` | pobieranie strumienia kawałkami (bez dławienia przez YouTube) |
+| `YtMediaSourceFactory.kt` | łączenie obrazu i dźwięku w trybie wideo |
 | `PlaybackService.kt` | ExoPlayer + MediaSession (odtwarzanie w tle) |
 | `UpdateManager.kt` | sprawdzanie wersji, pobieranie i instalacja APK |
-| `MainViewModel.kt`, `MainActivity.kt` | interfejs |
+| `MainViewModel.kt` | stan aplikacji |
+| `MainActivity.kt`, `ui/*.kt` | interfejs (wyszukiwarka, playlista, odtwarzacz) |
 | `.github/workflows/auto-update.yml` | automatyczne budowanie nowych wersji |

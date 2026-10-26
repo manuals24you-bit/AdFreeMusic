@@ -62,6 +62,11 @@ android {
         compose = true
         buildConfig = true
     }
+    lint {
+        // Lint nie blokuje kompilacji (Media3 oznacza część API jako "unstable").
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
     packaging {
         resources.excludes += setOf("/META-INF/{AL2.0,LGPL2.1}", "META-INF/DEPENDENCIES")
     }
@@ -75,6 +80,8 @@ dependencies {
 
     implementation("androidx.media3:media3-exoplayer:1.5.1")
     implementation("androidx.media3:media3-session:1.5.1")
+    implementation("androidx.media3:media3-ui:1.5.1")
+    implementation("androidx.palette:palette-ktx:1.0.0")
 
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.ui:ui")

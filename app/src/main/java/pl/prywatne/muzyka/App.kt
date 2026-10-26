@@ -9,5 +9,11 @@ class App : Application() {
     override fun onCreate() {
         super.onCreate()
         NewPipe.init(DownloaderImpl.instance, Localization("pl", "PL"), ContentCountry("PL"))
+        PlayerMode.video = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_VIDEO, false)
+    }
+
+    companion object {
+        const val PREFS = "settings"
+        const val KEY_VIDEO = "video"
     }
 }
