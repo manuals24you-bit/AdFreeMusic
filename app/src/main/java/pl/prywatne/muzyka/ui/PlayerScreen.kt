@@ -32,6 +32,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.GraphicEq
@@ -41,6 +42,7 @@ import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
@@ -58,6 +60,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -262,7 +265,8 @@ fun PlayerScreen(vm: MainViewModel) {
                 Spacer(Modifier.height(12.dp))
                 SeekBar(vm)
                 Controls(vm)
-                Spacer(Modifier.height(24.dp))
+                ExtraControls(vm)
+                Spacer(Modifier.height(16.dp))
             }
         }
 
@@ -369,6 +373,33 @@ private fun Controls(vm: MainViewModel) {
                 "Powtarzanie",
                 tint = if (vm.repeatMode == Player.REPEAT_MODE_OFF) Dim else Accent
             )
+        }
+    }
+}
+
+/** Przydatne przy lekcjach: cofnij/przewiń o 10 s i zmiana prędkości. */
+@Composable
+private fun ExtraControls(vm: MainViewModel) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 4.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        IconButton(onClick = { vm.seekBy(-10_000) }) {
+            Icon(Icons.Default.Replay10, "Cofnij 10 s", tint = Dim)
+        }
+        Spacer(Modifier.width(16.dp))
+        TextButton(onClick = { vm.cycleSpeed() }) {
+            val label = if (vm.speed % 1f == 0f) "%.0f×".format(vm.speed) else "%s×".format(vm.speed)
+            Text(
+                label.replace('.', ','),
+                color = if (vm.speed == 1f) Dim else Accent,
+                style = MaterialTheme.typography.titleSmall
+            )
+        }
+        Spacer(Modifier.width(16.dp))
+        IconButton(onClick = { vm.seekBy(10_000) }) {
+            Icon(Icons.Default.Forward10, "Przewiń 10 s", tint = Dim)
         }
     }
 }

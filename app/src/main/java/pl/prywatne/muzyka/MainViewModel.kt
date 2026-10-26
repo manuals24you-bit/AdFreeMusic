@@ -26,7 +26,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.random.Random
 
-enum class SearchKind { SONGS, PLAYLISTS }
+enum class SearchKind { SONGS, CLIPS, PLAYLISTS }
 
 data class OpenPlaylist(
     val key: String,           // adres, z którego wczytujemy kolejne strony
@@ -47,6 +47,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var songs by mutableStateOf<List<Track>>(emptyList())
         private set
+    var clips by mutableStateOf<List<Track>>(emptyList())
+        private set
     var playlists by mutableStateOf<List<PlaylistRef>>(emptyList())
         private set
     var loading by mutableStateOf(false)
@@ -54,6 +56,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     var message by mutableStateOf<String?>(null)
 
     private var songsQuery = ""
+    private var clipsQuery = ""
     private var playlistsQuery = ""
 
     // ---------- Playlista z YouTube ----------
@@ -85,6 +88,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var playerOpen by mutableStateOf(false)
     var fullscreen by mutableStateOf(false)
+    var speed by mutableStateOf(1f)
+        private set
 
     // ---------- Aktualizacje ----------
     var updateText by mutableStateOf<String?>(null)
@@ -131,6 +136,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         shuffle = p.shuffleModeEnabled
         repeatMode = p.repeatMode
         currentIndex = p.currentMediaItemIndex
+        speed = p.playbackParameters.speed
         if (rebuildQueue) {
             queue = (0 until p.mediaItemCount).map { i ->
                 val m = p.getMediaItemAt(i).mediaMetadata
@@ -161,12 +167,19 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             loading = true
             try {
-                if (searchKind == SearchKind.SONGS) {
-                    songs = withContext(Dispatchers.IO) { YouTubeRepo.searchSongs(q) }
-                    songsQuery = q
-                } else {
-                    playlists = withContext(Dispatchers.IO) { YouTubeRepo.searchPlaylists(q) }
-                    playlistsQuery = q
+                when (searchKind) {
+                    SearchKind.SONGS -> {
+                        songs = withContext(Dispatchers.IO) { YouTubeRepo.searchSongs(q) }
+                        songsQuery = q
+                    }
+                    SearchKind.CLIPS -> {
+                        clips = withContext(Dispatchers.IO) { YouTubeRepo.searchClips(q) }
+                        clipsQuery = q
+                    }
+                    SearchKind.PLAYLISTS -> {
+                        playlists = withContext(Dispatchers.IO) { YouTubeRepo.searchPlaylists(q) }
+                        playlistsQuery = q
+                    }
                 }
             } catch (e: CancellationException) {
                 throw e
@@ -181,7 +194,11 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun changeKind(newKind: SearchKind) {
         kind = newKind
         val q = query.trim()
-        val last = if (newKind == SearchKind.SONGS) songsQuery else playlistsQuery
+        val last = when (newKind) {
+            SearchKind.SONGS -> songsQuery
+            SearchKind.CLIPS -> clipsQuery
+            SearchKind.PLAYLISTS -> playlistsQuery
+        }
         if (q.isNotEmpty() && q != last) search()
     }
 
@@ -222,6 +239,17 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     /** Kliknięcie w wynik wyszukiwania: gra ten utwór, a potem kolejne wyniki. */
     fun playFromResults(index: Int) {
         playTracks(songs, index)
+    }
+
+    /** Kliknięcie klipu: włącza obraz, gra klip i kolejne wyniki, otwiera odtwarzacz. */
+    fun playClip(index: Int) {
+        if (controller == null) {
+            message = "Odtwarzacz jeszcze się uruchamia, spróbuj za chwilę"
+            return
+        }
+        setVideoMode(true, reloadQueue = false) // kolejka i tak zaraz zostanie zastąpiona
+        playTracks(clips, index)
+        playerOpen = true
     }
 
     fun enqueue(track: Track) {
@@ -270,7 +298,26 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun changeVideoMode(on: Boolean) {
+    fun changeVideoMode(on: Boolean) = setVideoMode(on, reloadQueue = true)
+
+    private val speeds = listOf(0.75f, 1f, 1.25f, 1.5f, 2f)
+
+    /** Prędkość odtwarzania: 0,75× → 1× → 1,25× → 1,5× → 2× → 0,75× … */
+    fun cycleSpeed() {
+        val c = controller ?: return
+        val next = speeds.firstOrNull { it > c.playbackParameters.speed + 0.01f } ?: speeds.first()
+        c.setPlaybackSpeed(next)
+    }
+
+    /** Cofnij / przewiń o podaną liczbę milisekund (np. -10 000). */
+    fun seekBy(deltaMs: Long) {
+        val c = controller ?: return
+        val target = c.currentPosition + deltaMs
+        val max = if (c.duration > 0) c.duration else Long.MAX_VALUE
+        c.seekTo(target.coerceIn(0L, max))
+    }
+
+    private fun setVideoMode(on: Boolean, reloadQueue: Boolean) {
         if (on == videoMode) return
         videoMode = on
         PlayerMode.video = on
@@ -279,6 +326,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             .getSharedPreferences(App.PREFS, Context.MODE_PRIVATE)
             .edit().putBoolean(App.KEY_VIDEO, on).apply()
 
+        if (!reloadQueue) return
         // Przeładuj kolejkę w nowym trybie, zachowując utwór i pozycję.
         val c = controller ?: return
         if (c.mediaItemCount == 0) return

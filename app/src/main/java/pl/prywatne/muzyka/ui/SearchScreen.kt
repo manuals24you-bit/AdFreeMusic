@@ -2,6 +2,7 @@
 
 package pl.prywatne.muzyka.ui
 
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -26,6 +28,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.SmartDisplay
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -91,7 +94,9 @@ fun SearchScreen(vm: MainViewModel) {
         )
 
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            Modifier
+                .horizontalScroll(rememberScrollState())
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FilterChip(
@@ -99,6 +104,12 @@ fun SearchScreen(vm: MainViewModel) {
                 onClick = { vm.changeKind(SearchKind.SONGS) },
                 label = { Text("Utwory") },
                 leadingIcon = { Icon(Icons.Default.MusicNote, null, Modifier.size(18.dp)) }
+            )
+            FilterChip(
+                selected = vm.kind == SearchKind.CLIPS,
+                onClick = { vm.changeKind(SearchKind.CLIPS) },
+                label = { Text("Klipy") },
+                leadingIcon = { Icon(Icons.Default.SmartDisplay, null, Modifier.size(18.dp)) }
             )
             FilterChip(
                 selected = vm.kind == SearchKind.PLAYLISTS,
@@ -110,12 +121,16 @@ fun SearchScreen(vm: MainViewModel) {
 
         if (vm.loading) LinearProgressIndicator(Modifier.fillMaxWidth())
 
-        val empty = if (vm.kind == SearchKind.SONGS) vm.songs.isEmpty() else vm.playlists.isEmpty()
+        val empty = when (vm.kind) {
+            SearchKind.SONGS -> vm.songs.isEmpty()
+            SearchKind.CLIPS -> vm.clips.isEmpty()
+            SearchKind.PLAYLISTS -> vm.playlists.isEmpty()
+        }
         if (empty && !vm.loading) {
             EmptyHint()
         } else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 16.dp)) {
-            if (vm.kind == SearchKind.SONGS) {
-                itemsIndexed(vm.songs, key = { i, t -> "$i-${t.url}" }) { i, track ->
+            when (vm.kind) {
+                SearchKind.SONGS -> itemsIndexed(vm.songs, key = { i, t -> "$i-${t.url}" }) { i, track ->
                     TrackRow(
                         track = track,
                         playing = vm.now?.mediaId == track.url,
@@ -127,8 +142,15 @@ fun SearchScreen(vm: MainViewModel) {
                         }
                     )
                 }
-            } else {
-                itemsIndexed(vm.playlists, key = { i, p -> "$i-${p.url}" }) { _, playlist ->
+                SearchKind.CLIPS -> itemsIndexed(vm.clips, key = { i, t -> "$i-${t.url}" }) { i, clip ->
+                    ClipCard(
+                        clip = clip,
+                        playing = vm.now?.mediaId == clip.url,
+                        onClick = { vm.playClip(i) },
+                        onQueue = { vm.enqueue(clip) }
+                    )
+                }
+                SearchKind.PLAYLISTS -> itemsIndexed(vm.playlists, key = { i, p -> "$i-${p.url}" }) { _, playlist ->
                     PlaylistRow(playlist) { vm.showPlaylist(playlist) }
                 }
             }

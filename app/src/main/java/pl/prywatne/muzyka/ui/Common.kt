@@ -20,12 +20,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -174,6 +176,68 @@ fun TrackRow(
             )
         }
         trailing()
+    }
+}
+
+/** Duża karta filmu (zakładka Klipy): miniatura 16:9 z czasem trwania, tytuł i kanał. */
+@Composable
+fun ClipCard(clip: Track, playing: Boolean, onClick: () -> Unit, onQueue: () -> Unit) {
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+            Artwork(clip.thumbnail, Modifier.fillMaxSize(), corner = 14.dp)
+            if (playing) {
+                Box(
+                    Modifier
+                        .matchParentSize()
+                        .clip(RoundedCornerShape(14.dp))
+                        .background(Color.Black.copy(alpha = 0.45f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.GraphicEq, null, Modifier.size(48.dp), tint = Color.White)
+                }
+            }
+            val duration = clip.durationSec.asDuration()
+            if (duration.isNotEmpty()) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.75f),
+                    shape = RoundedCornerShape(6.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)
+                ) {
+                    Text(
+                        duration,
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
+        }
+        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.Top) {
+            Column(Modifier.weight(1f)) {
+                Text(
+                    clip.title,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (playing) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    clip.uploader,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onQueue) {
+                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, "Dodaj do kolejki")
+            }
+        }
     }
 }
 

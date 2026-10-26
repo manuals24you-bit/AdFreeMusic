@@ -3,7 +3,9 @@
 Android 9+ (minSdk 28). Kotlin + Jetpack Compose + Media3 + NewPipeExtractor.
 
 **Co działa:**
-- wyszukiwanie utworów i **playlist z YouTube** (przełącznik „Utwory / Playlisty”),
+- trzy zakładki wyszukiwania: **Utwory** (YouTube Music), **Klipy** (zwykłe filmy: teledyski,
+  lekcje, wykłady — od razu z obrazem) i **Playlisty**,
+- w odtwarzaczu: prędkość 0,75×–2× oraz cofnij/przewiń o 10 s (przydatne przy lekcjach),
 - wklejenie linku do filmu lub playlisty w pole wyszukiwania od razu go otwiera,
 - playlista: „Odtwórz” / „Losowo” albo kliknięcie dowolnego utworu — cała playlista trafia do kolejki
   (do 500 utworów, dociągane w tle),

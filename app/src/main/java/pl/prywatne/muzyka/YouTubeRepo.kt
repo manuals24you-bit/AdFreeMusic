@@ -42,7 +42,17 @@ object YouTubeRepo {
     private fun handler(query: String, filter: String) =
         yt.searchQHFactory.fromQuery(query, listOf(filter), "")
 
-    fun searchSongs(query: String): List<Track> =
+    /** Utwory: wyszukiwanie w YouTube Music (same piosenki), a w razie problemu — zwykłe. */
+    fun searchSongs(query: String): List<Track> {
+        val music = runCatching {
+            SearchInfo.getInfo(yt, handler(query, YoutubeSearchQueryHandlerFactory.MUSIC_SONGS))
+                .relatedItems.filterIsInstance<StreamInfoItem>().map { it.toTrack() }
+        }.getOrNull()
+        return if (music.isNullOrEmpty()) searchClips(query) else music
+    }
+
+    /** Klipy: zwykłe filmy z YouTube — teledyski, lekcje, wykłady itp. */
+    fun searchClips(query: String): List<Track> =
         SearchInfo.getInfo(yt, handler(query, YoutubeSearchQueryHandlerFactory.VIDEOS))
             .relatedItems.filterIsInstance<StreamInfoItem>().map { it.toTrack() }
 
