@@ -6,6 +6,7 @@ plugins {
 
 val extractorVersion: String = providers.gradleProperty("extractorVersion").get()
 val updateRepo: String = providers.gradleProperty("updateRepo").get()
+val donateUrl: String = providers.gradleProperty("donateUrl").orElse("").get()
 
 // Na GitHub Actions VERSION_CODE = 1000 + numer przebiegu; lokalnie 1.
 val appVersionCode: Int = System.getenv("VERSION_CODE")?.toIntOrNull() ?: 1
@@ -24,6 +25,7 @@ android {
 
         buildConfigField("String", "EXTRACTOR_VERSION", "\"$extractorVersion\"")
         buildConfigField("String", "UPDATE_REPO", "\"$updateRepo\"")
+        buildConfigField("String", "DONATE_URL", "\"$donateUrl\"")
     }
 
     signingConfigs {

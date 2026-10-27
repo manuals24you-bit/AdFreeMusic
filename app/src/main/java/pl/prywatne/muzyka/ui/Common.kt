@@ -17,13 +17,20 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -40,6 +47,9 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -48,6 +58,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,6 +67,8 @@ import androidx.compose.ui.unit.dp
 import androidx.media3.common.Player
 import coil.compose.AsyncImage
 import kotlinx.coroutines.delay
+import pl.prywatne.muzyka.ArtistRef
+import pl.prywatne.muzyka.BuildConfig
 import pl.prywatne.muzyka.MainViewModel
 import pl.prywatne.muzyka.PlaylistRef
 import pl.prywatne.muzyka.Track
@@ -181,7 +194,7 @@ fun TrackRow(
 
 /** Duża karta filmu (zakładka Klipy): miniatura 16:9 z czasem trwania, tytuł i kanał. */
 @Composable
-fun ClipCard(clip: Track, playing: Boolean, onClick: () -> Unit, onQueue: () -> Unit) {
+fun ClipCard(clip: Track, playing: Boolean, onClick: () -> Unit, trailing: @Composable () -> Unit = {}) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -234,10 +247,85 @@ fun ClipCard(clip: Track, playing: Boolean, onClick: () -> Unit, onQueue: () -> 
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            IconButton(onClick = onQueue) {
-                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, "Dodaj do kolejki")
+            trailing()
+        }
+    }
+}
+
+/** Serduszko (ulubione) + menu: dodaj do kolejki, przejdź do wykonawcy. */
+@Composable
+fun TrackActions(vm: MainViewModel, track: Track, showArtist: Boolean = true) {
+    val favorite = vm.isFavorite(track.url)
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        IconButton(onClick = { vm.toggleFavorite(track) }) {
+            Icon(
+                if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                if (favorite) "Usuń z ulubionych" else "Dodaj do ulubionych",
+                tint = if (favorite) Accent else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Box {
+            var menu by remember { mutableStateOf(false) }
+            IconButton(onClick = { menu = true }) {
+                Icon(Icons.Default.MoreVert, "Więcej", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                DropdownMenuItem(
+                    text = { Text("Dodaj do kolejki") },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.PlaylistAdd, null) },
+                    onClick = {
+                        menu = false
+                        vm.enqueue(track)
+                    }
+                )
+                if (showArtist && !track.uploaderUrl.isNullOrBlank()) {
+                    DropdownMenuItem(
+                        text = { Text("Wykonawca: ${track.uploader}", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        leadingIcon = { Icon(Icons.Default.Person, null) },
+                        onClick = {
+                            menu = false
+                            vm.openArtistOf(track)
+                        }
+                    )
+                }
             }
         }
+    }
+}
+
+/** Okrągły awatar wykonawcy z podpisem (Biblioteka → Zapisani wykonawcy). */
+@Composable
+fun ArtistBubble(artist: ArtistRef, onClick: () -> Unit) {
+    Column(
+        Modifier
+            .width(88.dp)
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Box(
+            Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(Icons.Default.Person, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            AsyncImage(
+                model = artist.avatar,
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.matchParentSize()
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        Text(
+            artist.name,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            textAlign = TextAlign.Center,
+            style = MaterialTheme.typography.labelMedium
+        )
     }
 }
 
@@ -288,6 +376,52 @@ fun PlaylistRow(playlist: PlaylistRef, onClick: () -> Unit) {
             tint = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }
+}
+
+/** Okno „O aplikacji”: nazwa, wersja, twórca, źródła i (opcjonalnie) link do dotacji. */
+@Composable
+fun AboutDialog(onDismiss: () -> Unit) {
+    val uriHandler = LocalUriHandler.current
+    val donateUrl = BuildConfig.DONATE_URL
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Default.MusicNote, null, tint = Accent) },
+        title = { Text("Hoodify") },
+        text = {
+            Column {
+                Text("Twórca: Piotr Bogacz", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(4.dp))
+                Text("Wersja ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Odtwarzacz muzyki i filmów z YouTube bez reklam, z odtwarzaniem w tle. " +
+                        "Ulubione i zapisani wykonawcy są przechowywane tylko na tym telefonie.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Spacer(Modifier.height(12.dp))
+                Text(
+                    "Korzysta z NewPipeExtractor ${BuildConfig.EXTRACTOR_VERSION} (licencja GPLv3). " +
+                        "Aplikacja nie jest powiązana z YouTube ani Google.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        },
+        confirmButton = {
+            if (donateUrl.isNotBlank()) {
+                Button(onClick = { runCatching { uriHandler.openUri(donateUrl) } }) {
+                    Icon(Icons.Default.Favorite, null, Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Wesprzyj twórcę")
+                }
+            } else {
+                TextButton(onClick = onDismiss) { Text("OK") }
+            }
+        },
+        dismissButton = {
+            if (donateUrl.isNotBlank()) TextButton(onClick = onDismiss) { Text("Zamknij") }
+        }
+    )
 }
 
 @Composable

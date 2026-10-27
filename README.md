@@ -1,4 +1,6 @@
-# Muzyka — odtwarzacz audio z YouTube bez reklam (prywatny test)
+# Hoodify — odtwarzacz muzyki i filmów z YouTube bez reklam (prywatny test)
+
+Twórca: Piotr Bogacz
 
 Android 9+ (minSdk 28). Kotlin + Jetpack Compose + Media3 + NewPipeExtractor.
 
@@ -6,6 +8,9 @@ Android 9+ (minSdk 28). Kotlin + Jetpack Compose + Media3 + NewPipeExtractor.
 - trzy zakładki wyszukiwania: **Utwory** (YouTube Music), **Klipy** (zwykłe filmy: teledyski,
   lekcje, wykłady — od razu z obrazem) i **Playlisty**,
 - w odtwarzaczu: prędkość 0,75×–2× oraz cofnij/przewiń o 10 s (przydatne przy lekcjach),
+- ♡ ulubione utwory i zapisani wykonawcy w zakładce **Biblioteka** (zapisane tylko na telefonie),
+- strona wykonawcy/kanału: menu ⋮ przy utworze → „Wykonawca” albo stuknięcie nazwy w odtwarzaczu,
+- ekran nie gaśnie, gdy oglądasz wideo,
 - wklejenie linku do filmu lub playlisty w pole wyszukiwania od razu go otwiera,
 - playlista: „Odtwórz” / „Losowo” albo kliknięcie dowolnego utworu — cała playlista trafia do kolejki
   (do 500 utworów, dociągane w tle),
@@ -93,5 +98,6 @@ Od tej pory nowe wersje będą się budować same, gdy wyjdzie nowy extractor.
 | `PlaybackService.kt` | ExoPlayer + MediaSession (odtwarzanie w tle) |
 | `UpdateManager.kt` | sprawdzanie wersji, pobieranie i instalacja APK |
 | `MainViewModel.kt` | stan aplikacji |
-| `MainActivity.kt`, `ui/*.kt` | interfejs (wyszukiwarka, playlista, odtwarzacz) |
+| `Library.kt` | ulubione i zapisani wykonawcy (pamięć telefonu) |
+| `MainActivity.kt`, `ui/*.kt` | interfejs (wyszukiwarka, biblioteka, playlista/wykonawca, odtwarzacz) |
 | `.github/workflows/auto-update.yml` | automatyczne budowanie nowych wersji |

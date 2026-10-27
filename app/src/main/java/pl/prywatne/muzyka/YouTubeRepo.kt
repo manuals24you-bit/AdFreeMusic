@@ -5,6 +5,10 @@ import org.schabi.newpipe.extractor.Image
 import org.schabi.newpipe.extractor.Page
 import org.schabi.newpipe.extractor.ServiceList
 import org.schabi.newpipe.extractor.StreamingService
+import org.schabi.newpipe.extractor.channel.ChannelInfo
+import org.schabi.newpipe.extractor.channel.tabs.ChannelTabInfo
+import org.schabi.newpipe.extractor.channel.tabs.ChannelTabs
+import org.schabi.newpipe.extractor.linkhandler.ListLinkHandler
 import org.schabi.newpipe.extractor.playlist.PlaylistInfo
 import org.schabi.newpipe.extractor.playlist.PlaylistInfoItem
 import org.schabi.newpipe.extractor.search.SearchInfo
@@ -18,6 +22,22 @@ data class Track(
     val uploader: String,
     val durationSec: Long,
     val thumbnail: String?,
+    val uploaderUrl: String? = null,
+)
+
+/** Wykonawca / kanał, który można zapisać w Bibliotece. */
+data class ArtistRef(
+    val url: String,
+    val name: String,
+    val avatar: String?,
+)
+
+class ChannelData(
+    val artist: ArtistRef,
+    val subscribers: Long,
+    val tracks: List<Track>,
+    val tab: ListLinkHandler?,
+    val nextPage: Page?,
 )
 
 data class PlaylistRef(
@@ -89,7 +109,32 @@ object YouTubeRepo {
 
     fun video(url: String): Track {
         val info = StreamInfo.getInfo(yt, url)
-        return Track(info.name, info.url, info.uploaderName.orEmpty(), info.duration, info.thumbnails.best())
+        return Track(
+            info.name, info.url, info.uploaderName.orEmpty(), info.duration,
+            info.thumbnails.best(), info.uploaderUrl
+        )
+    }
+
+    /** Strona wykonawcy/kanału: dane + pierwsza strona filmów z zakładki „Filmy”. */
+    fun channel(url: String): ChannelData {
+        val info = ChannelInfo.getInfo(yt, url)
+        val artist = ArtistRef(info.url, info.name, info.avatars.best())
+        val tab = info.tabs.firstOrNull { ChannelTabs.VIDEOS in it.contentFilters }
+            ?: info.tabs.firstOrNull { ChannelTabs.TRACKS in it.contentFilters }
+            ?: info.tabs.firstOrNull()
+            ?: return ChannelData(artist, info.subscriberCount, emptyList(), null, null)
+        val tabInfo = ChannelTabInfo.getInfo(yt, tab)
+        val tracks = tabInfo.relatedItems.filterIsInstance<StreamInfoItem>().map { it.toTrack(artist) }
+        return ChannelData(
+            artist, info.subscriberCount, tracks, tab,
+            if (tabInfo.hasNextPage()) tabInfo.nextPage else null
+        )
+    }
+
+    fun channelMore(artist: ArtistRef, tab: ListLinkHandler, page: Page): Pair<List<Track>, Page?> {
+        val result = ChannelTabInfo.getMoreItems(yt, tab, page)
+        val tracks = result.items.filterIsInstance<StreamInfoItem>().map { it.toTrack(artist) }
+        return tracks to (if (result.hasNextPage()) result.nextPage else null)
     }
 
     /** Rozpoznaje wklejony link do filmu lub playlisty z YouTube. */
@@ -104,12 +149,14 @@ object YouTubeRepo {
         return if (type == StreamingService.LinkType.STREAM) LinkTarget.Video(t) else null
     }
 
-    private fun StreamInfoItem.toTrack() = Track(
+    /** [owner] — gdy wiemy, czyj to kanał (na stronie kanału filmy często nie mają autora). */
+    private fun StreamInfoItem.toTrack(owner: ArtistRef? = null) = Track(
         title = name,
         url = url,
-        uploader = uploaderName.orEmpty(),
+        uploader = uploaderName?.takeIf { it.isNotBlank() } ?: owner?.name.orEmpty(),
         durationSec = duration,
         thumbnail = thumbnails.best(),
+        uploaderUrl = uploaderUrl?.takeIf { it.isNotBlank() } ?: owner?.url,
     )
 }
 

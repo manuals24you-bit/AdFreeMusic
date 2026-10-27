@@ -32,6 +32,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
@@ -111,7 +113,7 @@ fun MiniPlayer(vm: MainViewModel) {
     val fraction = if (vm.durationMs > 0) (position.toFloat() / vm.durationMs).coerceIn(0f, 1f) else 0f
 
     Surface(tonalElevation = 6.dp, shadowElevation = 8.dp) {
-        Column(Modifier.navigationBarsPadding()) {
+        Column {
             LinearProgressIndicator(
                 progress = { fraction },
                 modifier = Modifier.fillMaxWidth().height(2.dp),
@@ -246,22 +248,39 @@ fun PlayerScreen(vm: MainViewModel) {
                 }
 
                 Spacer(Modifier.height(24.dp))
-                Text(
-                    now.title,
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    now.artist,
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = Dim,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            now.title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        // Stuknięcie w wykonawcę otwiera jego stronę.
+                        Text(
+                            now.artist,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = Dim,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.clickable(enabled = !now.uploaderUrl.isNullOrBlank()) {
+                                vm.openArtistNow()
+                            }
+                        )
+                    }
+                    val favorite = vm.isFavorite(now.mediaId)
+                    IconButton(onClick = { vm.toggleFavoriteNow() }) {
+                        Icon(
+                            if (favorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            if (favorite) "Usuń z ulubionych" else "Dodaj do ulubionych",
+                            Modifier.size(28.dp),
+                            tint = if (favorite) Accent else Color.White
+                        )
+                    }
+                }
                 Spacer(Modifier.height(12.dp))
                 SeekBar(vm)
                 Controls(vm)

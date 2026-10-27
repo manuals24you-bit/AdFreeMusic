@@ -4,7 +4,10 @@ import android.app.Application
 import android.content.ComponentName
 import android.content.Context
 import android.net.Uri
+import android.os.Bundle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.core.content.ContextCompat
@@ -21,21 +24,37 @@ import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.ListenableFuture
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.schabi.newpipe.extractor.Page
 import kotlin.random.Random
 
 enum class SearchKind { SONGS, CLIPS, PLAYLISTS }
 
-data class OpenPlaylist(
-    val key: String,           // adres, z którego wczytujemy kolejne strony
-    val ref: PlaylistRef,
+enum class MainTab { SEARCH, LIBRARY }
+
+enum class CollectionType { PLAYLIST, CHANNEL }
+
+/** Otwarta playlista albo strona wykonawcy — lista utworów do odtworzenia. */
+data class TrackCollection(
+    val key: String,
+    val type: CollectionType,
+    val title: String,
+    val subtitle: String,
+    val image: String?,
+    val artist: ArtistRef?,      // tylko dla kanału (do przycisku „Zapisz”)
     val tracks: List<Track>,
     val loadingMore: Boolean,
 )
 
-data class NowPlaying(val mediaId: String, val title: String, val artist: String, val art: Uri?)
+data class NowPlaying(
+    val mediaId: String,
+    val title: String,
+    val artist: String,
+    val art: Uri?,
+    val uploaderUrl: String?,
+    val durationSec: Long,
+)
 
 data class QueueEntry(val title: String, val artist: String, val art: Uri?)
 
@@ -59,11 +78,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private var clipsQuery = ""
     private var playlistsQuery = ""
 
-    // ---------- Playlista z YouTube ----------
-    var openPlaylist by mutableStateOf<OpenPlaylist?>(null)
+    // ---------- Nawigacja ----------
+    var tab by mutableStateOf(MainTab.SEARCH)
         private set
-    private var playlistJob: Job? = null
+    /** Stos otwartych stron (playlisty / wykonawcy); ostatnia jest widoczna. */
+    val pages = mutableStateListOf<String>()
+    private val collections = mutableStateMapOf<String, TrackCollection>()
+    val currentCollection: TrackCollection?
+        get() = pages.lastOrNull()?.let { collections[it] }
     private var activePlaylistKey: String? = null
+
+    // ---------- Biblioteka (tylko na telefonie) ----------
+    private val library = Library(app)
+    var favorites by mutableStateOf(library.loadFavorites())
+        private set
+    var favoriteUrls by mutableStateOf(favorites.map { it.url }.toSet())
+        private set
+    var artists by mutableStateOf(library.loadArtists())
+        private set
 
     // ---------- Odtwarzacz ----------
     var controller by mutableStateOf<MediaController?>(null)
@@ -123,11 +155,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun refresh(p: Player, rebuildQueue: Boolean) {
         now = p.currentMediaItem?.let {
+            val extras = it.mediaMetadata.extras
             NowPlaying(
                 mediaId = it.mediaId,
                 title = it.mediaMetadata.title?.toString().orEmpty(),
                 artist = it.mediaMetadata.artist?.toString().orEmpty(),
                 art = it.mediaMetadata.artworkUri,
+                uploaderUrl = extras?.getString(EXTRA_UPLOADER_URL),
+                durationSec = extras?.getLong(EXTRA_DURATION) ?: 0L,
             )
         }
         isPlaying = p.isPlaying
@@ -339,51 +374,191 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         c.playWhenReady = wasPlaying
     }
 
-    // ---------- Playlisty z YouTube ----------
+    // ---------- Nawigacja ----------
 
-    fun showPlaylist(ref: PlaylistRef) {
-        if (playlistJob?.isActive == true && activePlaylistKey != openPlaylist?.key) playlistJob?.cancel()
-        val key = ref.url
-        openPlaylist = OpenPlaylist(key, ref, emptyList(), loadingMore = true)
+    fun selectTab(newTab: MainTab) {
+        pages.clear()
+        tab = newTab
+    }
 
-        playlistJob = viewModelScope.launch {
-            fun show(update: (OpenPlaylist) -> OpenPlaylist) {
-                openPlaylist?.takeIf { it.key == key }?.let { openPlaylist = update(it) }
-            }
+    fun back() {
+        if (pages.isNotEmpty()) pages.removeAt(pages.lastIndex)
+    }
+
+    private fun push(key: String) {
+        if (pages.lastOrNull() != key) pages.add(key)
+    }
+
+    private fun update(key: String, change: (TrackCollection) -> TrackCollection) {
+        collections[key]?.let { collections[key] = change(it) }
+    }
+
+    /** Dociąga kolejne strony utworów (do [max]) i — jeśli ta lista właśnie gra — dopisuje je do kolejki. */
+    private suspend fun loadRest(
+        key: String,
+        first: List<Track>,
+        firstNext: Page?,
+        max: Int,
+        fetch: (Page) -> Pair<List<Track>, Page?>,
+    ) {
+        var tracks = first
+        var page = firstNext
+        while (true) {
+            val current = page ?: break
+            if (tracks.size >= max) break
+            val (more, next) = withContext(Dispatchers.IO) { fetch(current) }
+            tracks = tracks + more
+            if (activePlaylistKey == key) controller?.addMediaItems(more.map { it.toMediaItem() })
+            page = if (more.isEmpty()) null else next
+            val stillLoading = page != null && tracks.size < max
+            val snapshot = tracks
+            update(key) { it.copy(tracks = snapshot, loadingMore = stillLoading) }
+        }
+        update(key) { it.copy(loadingMore = false) }
+    }
+
+    private fun loadCollection(key: String, what: String, block: suspend () -> Unit) {
+        viewModelScope.launch {
             try {
-                val first = withContext(Dispatchers.IO) { YouTubeRepo.playlist(key) }
-                var tracks = first.tracks
-                val header = first.ref.copy(thumbnail = first.ref.thumbnail ?: ref.thumbnail)
-                show { it.copy(ref = header, tracks = tracks, loadingMore = first.nextPage != null) }
-
-                var page = first.nextPage
-                while (page != null && tracks.size < MAX_PLAYLIST) {
-                    val current = page ?: break
-                    val (more, next) = withContext(Dispatchers.IO) { YouTubeRepo.playlistMore(key, current) }
-                    tracks = tracks + more
-                    if (activePlaylistKey == key) controller?.addMediaItems(more.map { it.toMediaItem() })
-                    page = if (more.isEmpty()) null else next
-                    show { it.copy(tracks = tracks, loadingMore = page != null && tracks.size < MAX_PLAYLIST) }
-                }
-                show { it.copy(loadingMore = false) }
+                block()
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                message = "Nie udało się wczytać playlisty: ${e.message}"
-                show { it.copy(loadingMore = false) }
+                message = "Nie udało się wczytać $what: ${e.message}"
+                collections.remove(key)
+                if (pages.lastOrNull() == key) back()
             }
         }
     }
 
-    fun closePlaylist() {
-        // Jeśli ta playlista właśnie gra, dalej dociągamy jej kolejne utwory w tle.
-        if (activePlaylistKey != openPlaylist?.key) playlistJob?.cancel()
-        openPlaylist = null
+    // ---------- Playlisty z YouTube ----------
+
+    fun showPlaylist(ref: PlaylistRef) {
+        val key = "pl:" + ref.url
+        push(key)
+        if (key in collections) return
+        collections[key] = TrackCollection(
+            key, CollectionType.PLAYLIST, ref.title, ref.uploader, ref.thumbnail,
+            artist = null, tracks = emptyList(), loadingMore = true
+        )
+        loadCollection(key, "playlisty") {
+            val data = withContext(Dispatchers.IO) { YouTubeRepo.playlist(ref.url) }
+            update(key) {
+                it.copy(
+                    title = data.ref.title,
+                    subtitle = data.ref.uploader,
+                    image = data.ref.thumbnail ?: ref.thumbnail ?: data.tracks.firstOrNull()?.thumbnail,
+                    tracks = data.tracks,
+                    loadingMore = data.nextPage != null,
+                )
+            }
+            loadRest(key, data.tracks, data.nextPage, MAX_PLAYLIST) { page ->
+                YouTubeRepo.playlistMore(ref.url, page)
+            }
+        }
     }
 
-    fun playPlaylist(start: Int, shuffleOn: Boolean) {
-        val p = openPlaylist ?: return
-        playTracks(p.tracks, if (shuffleOn) -1 else start, shuffleOn, p.key)
+    // ---------- Wykonawcy / kanały ----------
+
+    fun showChannel(channelUrl: String, name: String) {
+        // Linki z YouTube Music prowadzą do tego samego kanału na zwykłym YouTube.
+        val url = channelUrl.replace("music.youtube.com", "www.youtube.com")
+        playerOpen = false
+        fullscreen = false
+        val key = "ch:$url"
+        push(key)
+        if (key in collections) return
+        collections[key] = TrackCollection(
+            key, CollectionType.CHANNEL, name, "", null,
+            artist = ArtistRef(url, name, null), tracks = emptyList(), loadingMore = true
+        )
+        loadCollection(key, "wykonawcy") {
+            val data = withContext(Dispatchers.IO) { YouTubeRepo.channel(url) }
+            val subs = if (data.subscribers > 0) "${formatCount(data.subscribers)} subskrybentów" else ""
+            update(key) {
+                it.copy(
+                    title = data.artist.name,
+                    subtitle = subs,
+                    image = data.artist.avatar,
+                    artist = data.artist.copy(url = url),
+                    tracks = data.tracks,
+                    loadingMore = data.nextPage != null,
+                )
+            }
+            // Zapisany wykonawca dostaje aktualny awatar i nazwę.
+            if (isArtistSaved(url)) {
+                artists = artists.map { a -> if (a.url == url) data.artist.copy(url = url) else a }
+                library.saveArtists(artists)
+            }
+            val channelTab = data.tab
+            if (channelTab != null) {
+                loadRest(key, data.tracks, data.nextPage, MAX_CHANNEL) { page ->
+                    YouTubeRepo.channelMore(data.artist, channelTab, page)
+                }
+            } else {
+                update(key) { it.copy(loadingMore = false) }
+            }
+        }
+    }
+
+    fun openArtistOf(track: Track) {
+        val url = track.uploaderUrl
+        if (url.isNullOrBlank()) message = "Brak informacji o wykonawcy" else showChannel(url, track.uploader)
+    }
+
+    fun openArtistNow() {
+        val n = now ?: return
+        val url = n.uploaderUrl
+        if (url.isNullOrBlank()) message = "Brak informacji o wykonawcy" else showChannel(url, n.artist)
+    }
+
+    fun playCollection(start: Int, shuffleOn: Boolean) {
+        val c = currentCollection ?: return
+        playTracks(c.tracks, if (shuffleOn) -1 else start, shuffleOn, c.key)
+    }
+
+    // ---------- Ulubione i zapisani wykonawcy ----------
+
+    fun isFavorite(url: String) = url in favoriteUrls
+
+    fun toggleFavorite(track: Track) {
+        favorites = if (track.url in favoriteUrls) {
+            favorites.filterNot { it.url == track.url }
+        } else {
+            message = "Dodano do ulubionych"
+            listOf(track) + favorites
+        }
+        favoriteUrls = favorites.map { it.url }.toSet()
+        library.saveFavorites(favorites)
+    }
+
+    fun toggleFavoriteNow() {
+        val n = now ?: return
+        val track = favorites.firstOrNull { it.url == n.mediaId } ?: Track(
+            title = n.title,
+            url = n.mediaId,
+            uploader = n.artist,
+            durationSec = if (n.durationSec > 0) n.durationSec else durationMs / 1000,
+            thumbnail = n.art?.toString(),
+            uploaderUrl = n.uploaderUrl,
+        )
+        toggleFavorite(track)
+    }
+
+    fun playFavorites(start: Int, shuffleOn: Boolean) {
+        playTracks(favorites, if (shuffleOn) -1 else start, shuffleOn)
+    }
+
+    fun isArtistSaved(url: String) = artists.any { it.url == url }
+
+    fun toggleArtist(artist: ArtistRef) {
+        artists = if (isArtistSaved(artist.url)) {
+            artists.filterNot { it.url == artist.url }
+        } else {
+            message = "Zapisano: ${artist.name}"
+            artists + artist
+        }
+        library.saveArtists(artists)
     }
 
     // ---------- Aktualizacje ----------
@@ -453,8 +628,12 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private companion object {
         const val MAX_PLAYLIST = 500
+        const val MAX_CHANNEL = 200
     }
 }
+
+private const val EXTRA_UPLOADER_URL = "uploaderUrl"
+private const val EXTRA_DURATION = "durationSec"
 
 fun Track.toMediaItem(): MediaItem = MediaItem.Builder()
     .setMediaId(url)
@@ -464,6 +643,17 @@ fun Track.toMediaItem(): MediaItem = MediaItem.Builder()
             .setTitle(title)
             .setArtist(uploader)
             .setArtworkUri(thumbnail?.toUri())
+            .setExtras(Bundle().apply {
+                putString(EXTRA_UPLOADER_URL, uploaderUrl)
+                putLong(EXTRA_DURATION, durationSec)
+            })
             .build()
     )
     .build()
+
+/** 1 234 567 → „1,2 mln”, 45 600 → „45,6 tys.” */
+fun formatCount(n: Long): String = when {
+    n >= 1_000_000 -> "%.1f mln".format(n / 1_000_000.0).replace('.', ',')
+    n >= 1_000 -> "%.1f tys.".format(n / 1_000.0).replace('.', ',')
+    else -> n.toString()
+}

@@ -11,8 +11,9 @@
 
     <application
         android:name=".App"
-        android:label="Muzyka"
-        android:icon="@android:drawable/ic_media_play"
+        android:label="Hoodify"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:usesCleartextTraffic="false">
 

@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SmartDisplay
+import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -41,6 +42,10 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -55,11 +60,16 @@ import pl.prywatne.muzyka.SearchKind
 @Composable
 fun SearchScreen(vm: MainViewModel) {
     val focus = LocalFocusManager.current
+    var showAbout by remember { mutableStateOf(false) }
+    if (showAbout) AboutDialog { showAbout = false }
 
     Column(Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text("Muzyka", fontWeight = FontWeight.Bold) },
+            title = { Text("Hoodify", fontWeight = FontWeight.Bold) },
             actions = {
+                IconButton(onClick = { showAbout = true }) {
+                    Icon(Icons.Outlined.Info, contentDescription = "O aplikacji")
+                }
                 IconButton(onClick = { vm.checkUpdates() }) {
                     Icon(Icons.Default.SystemUpdate, contentDescription = "Sprawdź aktualizacje")
                 }
@@ -135,11 +145,7 @@ fun SearchScreen(vm: MainViewModel) {
                         track = track,
                         playing = vm.now?.mediaId == track.url,
                         onClick = { vm.playFromResults(i) },
-                        trailing = {
-                            IconButton(onClick = { vm.enqueue(track) }) {
-                                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, "Dodaj do kolejki")
-                            }
-                        }
+                        trailing = { TrackActions(vm, track) }
                     )
                 }
                 SearchKind.CLIPS -> itemsIndexed(vm.clips, key = { i, t -> "$i-${t.url}" }) { i, clip ->
@@ -147,7 +153,7 @@ fun SearchScreen(vm: MainViewModel) {
                         clip = clip,
                         playing = vm.now?.mediaId == clip.url,
                         onClick = { vm.playClip(i) },
-                        onQueue = { vm.enqueue(clip) }
+                        trailing = { TrackActions(vm, clip) }
                     )
                 }
                 SearchKind.PLAYLISTS -> itemsIndexed(vm.playlists, key = { i, p -> "$i-${p.url}" }) { _, playlist ->
