@@ -2,6 +2,9 @@ package pl.prywatne.muzyka
 
 import android.net.Uri
 import androidx.annotation.OptIn
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.ResolvingDataSource
@@ -13,10 +16,12 @@ import org.schabi.newpipe.extractor.stream.StreamInfo
 import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
-/** Tryb odtwarzania: false = tylko dźwięk, true = obraz + dźwięk. */
+/**
+ * Tryb odtwarzania: false = tylko dźwięk, true = obraz + dźwięk.
+ * Wspólny dla telefonu i ekranu w aucie (stan Compose, więc oba ekrany odświeżają się same).
+ */
 object PlayerMode {
-    @Volatile
-    var video: Boolean = false
+    var video: Boolean by mutableStateOf(false)
 }
 
 /**

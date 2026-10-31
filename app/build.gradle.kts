@@ -85,6 +85,12 @@ dependencies {
     implementation("androidx.media3:media3-ui:1.5.1")
     implementation("androidx.palette:palette-ktx:1.0.0")
 
+    // Android Auto: nieoficjalne SDK (to samo co w Fermacie) + jego zależności
+    implementation(files("libs/aauto.aar"))
+    implementation("androidx.fragment:fragment-ktx:1.8.5")
+    implementation("androidx.recyclerview:recyclerview:1.3.2")
+    implementation("androidx.cardview:cardview:1.0.0")
+
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")

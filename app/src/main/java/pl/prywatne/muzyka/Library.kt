@@ -1,6 +1,9 @@
 package pl.prywatne.muzyka
 
 import android.content.Context
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -59,5 +62,37 @@ class Library(context: Context) {
     private companion object {
         const val KEY_FAVORITES = "favorites"
         const val KEY_ARTISTS = "artists"
+    }
+}
+
+/** Jedna, wspólna kopia biblioteki dla całej aplikacji (telefon + Android Auto). */
+object LibraryStore {
+    private var library: Library? = null
+
+    var favorites: List<Track> by mutableStateOf(emptyList())
+        private set
+    var favoriteUrls: Set<String> by mutableStateOf(emptySet())
+        private set
+    var artists: List<ArtistRef> by mutableStateOf(emptyList())
+        private set
+
+    fun init(context: Context) {
+        if (library != null) return
+        val lib = Library(context.applicationContext)
+        library = lib
+        favorites = lib.loadFavorites()
+        favoriteUrls = favorites.map { it.url }.toSet()
+        artists = lib.loadArtists()
+    }
+
+    fun updateFavorites(list: List<Track>) {
+        favorites = list
+        favoriteUrls = list.map { it.url }.toSet()
+        library?.saveFavorites(list)
+    }
+
+    fun updateArtists(list: List<ArtistRef>) {
+        artists = list
+        library?.saveArtists(list)
     }
 }

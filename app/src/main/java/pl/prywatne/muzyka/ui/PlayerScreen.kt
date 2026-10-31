@@ -294,7 +294,7 @@ fun PlayerScreen(vm: MainViewModel) {
 }
 
 @Composable
-private fun ModeSwitch(video: Boolean, onChange: (Boolean) -> Unit) {
+internal fun ModeSwitch(video: Boolean, onChange: (Boolean) -> Unit) {
     Row(
         Modifier
             .clip(CircleShape)
@@ -324,7 +324,7 @@ private fun ModeTab(label: String, icon: ImageVector, selected: Boolean, onClick
 }
 
 @Composable
-private fun SeekBar(vm: MainViewModel) {
+internal fun SeekBar(vm: MainViewModel) {
     val position by rememberPosition(vm.controller)
     var dragging by remember { mutableStateOf<Float?>(null) }
     val duration = vm.durationMs
@@ -353,7 +353,7 @@ private fun SeekBar(vm: MainViewModel) {
 }
 
 @Composable
-private fun Controls(vm: MainViewModel) {
+internal fun Controls(vm: MainViewModel) {
     Row(
         Modifier.fillMaxWidth().padding(top = 8.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -398,7 +398,7 @@ private fun Controls(vm: MainViewModel) {
 
 /** Przydatne przy lekcjach: cofnij/przewiń o 10 s i zmiana prędkości. */
 @Composable
-private fun ExtraControls(vm: MainViewModel) {
+internal fun ExtraControls(vm: MainViewModel) {
     Row(
         Modifier.fillMaxWidth().padding(top = 4.dp),
         horizontalArrangement = Arrangement.Center,
@@ -426,6 +426,14 @@ private fun ExtraControls(vm: MainViewModel) {
 @Composable
 private fun QueueSheet(vm: MainViewModel, onDismiss: () -> Unit) {
     ModalBottomSheet(onDismissRequest = onDismiss, containerColor = Color(0xFF1A1A1F)) {
+        QueueList(vm, Modifier.fillMaxHeight(0.75f))
+    }
+}
+
+/** Lista kolejki (w telefonie w wysuwanym panelu, w aucie jako osobna zakładka). */
+@Composable
+internal fun QueueList(vm: MainViewModel, modifier: Modifier = Modifier) {
+    Column(modifier) {
         Text(
             "Kolejka · ${vm.queue.size}",
             style = MaterialTheme.typography.titleMedium,
@@ -433,7 +441,7 @@ private fun QueueSheet(vm: MainViewModel, onDismiss: () -> Unit) {
             modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
         )
         val listState = rememberLazyListState(initialFirstVisibleItemIndex = vm.currentIndex.coerceAtLeast(0))
-        LazyColumn(Modifier.fillMaxHeight(0.75f), state = listState) {
+        LazyColumn(Modifier.fillMaxWidth(), state = listState) {
             itemsIndexed(vm.queue) { i, entry ->
                 val current = i == vm.currentIndex
                 Row(

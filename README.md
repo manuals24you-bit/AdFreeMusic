@@ -25,6 +25,20 @@ Android 9+ (minSdk 28). Kotlin + Jetpack Compose + Media3 + NewPipeExtractor.
 
 ---
 
+## Android Auto (ekran w aucie)
+
+Hoodify ma własny ekran w Android Auto: wyszukiwanie (klawiatura na ekranie auta), Biblioteka,
+playlisty, strony wykonawców, kolejka oraz **wideo na cały ekran** — przeznaczone do oglądania na postoju.
+Używa tego samego nieoficjalnego Android Auto SDK co Fermata (`app/libs/aauto.aar`), więc:
+
+1. W telefonie otwórz **Android Auto** → przewiń na dół i stuknij **10 razy w „Wersja”** →
+   potwierdź włączenie trybu programisty.
+2. Menu ⋮ w prawym górnym rogu → **Ustawienia programisty** → zaznacz **„Nieznane źródła”**.
+3. Rozłącz i podłącz telefon do auta. Hoodify pojawi się w menu aplikacji Android Auto.
+
+Ulubione, wykonawcy i tryb Audio/Wideo są wspólne dla telefonu i ekranu w aucie.
+Po dużych aktualizacjach Android Auto ta funkcja może wymagać poprawek (dotyczy też Fermaty).
+
 ## 1. Pierwsze uruchomienie (Android Studio)
 
 1. Otwórz folder `AdFreeMusic` w Android Studio (Ladybug lub nowsze).
@@ -99,5 +113,7 @@ Od tej pory nowe wersje będą się budować same, gdy wyjdzie nowy extractor.
 | `UpdateManager.kt` | sprawdzanie wersji, pobieranie i instalacja APK |
 | `MainViewModel.kt` | stan aplikacji |
 | `Library.kt` | ulubione i zapisani wykonawcy (pamięć telefonu) |
+| `car/*.kt`, `ui/CarScreens.kt` | ekran Hoodify w Android Auto |
+| `app/libs/aauto.aar` | nieoficjalne Android Auto SDK (z projektu Fermata, GPLv3) |
 | `MainActivity.kt`, `ui/*.kt` | interfejs (wyszukiwarka, biblioteka, playlista/wykonawca, odtwarzacz) |
 | `.github/workflows/auto-update.yml` | automatyczne budowanie nowych wersji |

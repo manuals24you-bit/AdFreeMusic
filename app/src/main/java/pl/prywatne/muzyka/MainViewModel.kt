@@ -88,14 +88,10 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         get() = pages.lastOrNull()?.let { collections[it] }
     private var activePlaylistKey: String? = null
 
-    // ---------- Biblioteka (tylko na telefonie) ----------
-    private val library = Library(app)
-    var favorites by mutableStateOf(library.loadFavorites())
-        private set
-    var favoriteUrls by mutableStateOf(favorites.map { it.url }.toSet())
-        private set
-    var artists by mutableStateOf(library.loadArtists())
-        private set
+    // ---------- Biblioteka (tylko na telefonie, wspólna dla telefonu i auta) ----------
+    val favorites: List<Track> get() = LibraryStore.favorites
+    val favoriteUrls: Set<String> get() = LibraryStore.favoriteUrls
+    val artists: List<ArtistRef> get() = LibraryStore.artists
 
     // ---------- Odtwarzacz ----------
     var controller by mutableStateOf<MediaController?>(null)
@@ -116,8 +112,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var currentIndex by mutableStateOf(-1)
         private set
-    var videoMode by mutableStateOf(PlayerMode.video)
-        private set
+    val videoMode: Boolean get() = PlayerMode.video
     var playerOpen by mutableStateOf(false)
     var fullscreen by mutableStateOf(false)
     var speed by mutableStateOf(1f)
@@ -354,7 +349,6 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun setVideoMode(on: Boolean, reloadQueue: Boolean) {
         if (on == videoMode) return
-        videoMode = on
         PlayerMode.video = on
         if (!on) fullscreen = false
         getApplication<Application>()
@@ -487,8 +481,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
             }
             // Zapisany wykonawca dostaje aktualny awatar i nazwę.
             if (isArtistSaved(url)) {
-                artists = artists.map { a -> if (a.url == url) data.artist.copy(url = url) else a }
-                library.saveArtists(artists)
+                LibraryStore.updateArtists(artists.map { a -> if (a.url == url) data.artist.copy(url = url) else a })
             }
             val channelTab = data.tab
             if (channelTab != null) {
@@ -522,14 +515,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun isFavorite(url: String) = url in favoriteUrls
 
     fun toggleFavorite(track: Track) {
-        favorites = if (track.url in favoriteUrls) {
-            favorites.filterNot { it.url == track.url }
-        } else {
-            message = "Dodano do ulubionych"
-            listOf(track) + favorites
-        }
-        favoriteUrls = favorites.map { it.url }.toSet()
-        library.saveFavorites(favorites)
+        LibraryStore.updateFavorites(
+            if (track.url in favoriteUrls) {
+                favorites.filterNot { it.url == track.url }
+            } else {
+                message = "Dodano do ulubionych"
+                listOf(track) + favorites
+            }
+        )
     }
 
     fun toggleFavoriteNow() {
@@ -552,13 +545,14 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun isArtistSaved(url: String) = artists.any { it.url == url }
 
     fun toggleArtist(artist: ArtistRef) {
-        artists = if (isArtistSaved(artist.url)) {
-            artists.filterNot { it.url == artist.url }
-        } else {
-            message = "Zapisano: ${artist.name}"
-            artists + artist
-        }
-        library.saveArtists(artists)
+        LibraryStore.updateArtists(
+            if (isArtistSaved(artist.url)) {
+                artists.filterNot { it.url == artist.url }
+            } else {
+                message = "Zapisano: ${artist.name}"
+                artists + artist
+            }
+        )
     }
 
     // ---------- Aktualizacje ----------

@@ -10,6 +10,7 @@ class App : Application() {
         super.onCreate()
         NewPipe.init(DownloaderImpl.instance, Localization("pl", "PL"), ContentCountry("PL"))
         PlayerMode.video = getSharedPreferences(PREFS, MODE_PRIVATE).getBoolean(KEY_VIDEO, false)
+        LibraryStore.init(this)
     }
 
     companion object {

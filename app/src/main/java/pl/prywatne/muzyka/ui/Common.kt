@@ -47,6 +47,7 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -75,6 +76,9 @@ import pl.prywatne.muzyka.Track
 import pl.prywatne.muzyka.asDuration
 
 val Accent = Color(0xFFFF4F79)
+
+/** true, gdy interfejs jest wyświetlany na ekranie w aucie (Android Auto). */
+val LocalCarMode = staticCompositionLocalOf { false }
 
 @Composable
 fun AppTheme(content: @Composable () -> Unit) {
@@ -264,7 +268,18 @@ fun TrackActions(vm: MainViewModel, track: Track, showArtist: Boolean = true) {
                 tint = if (favorite) Accent else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Box {
+        if (LocalCarMode.current) {
+            // W aucie nie ma okienek (menu) — przyciski są widoczne od razu.
+            IconButton(onClick = { vm.enqueue(track) }) {
+                Icon(Icons.AutoMirrored.Filled.PlaylistAdd, "Dodaj do kolejki",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (showArtist && !track.uploaderUrl.isNullOrBlank()) {
+                IconButton(onClick = { vm.openArtistOf(track) }) {
+                    Icon(Icons.Default.Person, "Wykonawca", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+            }
+        } else Box {
             var menu by remember { mutableStateOf(false) }
             IconButton(onClick = { menu = true }) {
                 Icon(Icons.Default.MoreVert, "Więcej", tint = MaterialTheme.colorScheme.onSurfaceVariant)
